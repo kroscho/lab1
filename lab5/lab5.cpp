@@ -183,7 +183,7 @@ double FindErrorForNewton(double x, double* xArr, double M6)
 	return M6 * abs(w) / fact;
 }
 
-//метод Ќьютона
+//метод Newton
 void Newton(double *xArr, double *xArr1, double *yArr)
 {
 	cout << "»нтерпол€ционна€ формула Ќьютона\n";
