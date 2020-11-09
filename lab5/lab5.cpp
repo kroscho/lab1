@@ -13,6 +13,9 @@ double b = 2.0;
 double a = 1.0;
 double h = 1 / 5.;
 typedef vector<double> myVector;
+typedef vector<myVector> myMatrix;
+double* yArr = new double[n];
+
 
 //исходная функция
 double F(double x)
@@ -85,6 +88,28 @@ double FindErrorForSpline(double M4, double M5)
 	return (M4 / 384 + M5 * h / 240) * pow(h, 4);
 }
 
+// Метод прогонки 
+myVector SweepMethod(myMatrix m, myVector r, int const n)
+{
+	double y;
+	myVector a(n + 1), B(n + 1), resV(n + 1);
+	y = m[0][0];
+	a[0] = -m[0][1] / y;
+	B[0] = r[0] / y;
+	for (int i = 1; i < n; i++) {
+		y = m[i][i] + m[i][i - 1] * a[i - 1];
+		a[i] = -m[i][i + 1] / y;
+		B[i] = (r[i] - m[i][i - 1] * B[i - 1]) / y;
+	}
+	resV[n] = (r[n] - m[n][n - 1] * B[n - 1]) / (m[n][n] + m[n][n - 1] * a[n - 1]);
+	for (int i = n - 1; i >= 0; i--)
+	{
+		resV[i] = a[i] * resV[i + 1] + B[i];
+	}
+	return resV;
+}
+
+
 //Интерполяция кубическим сплайном
 void SplineInterpolation(double* xArr1, double* xArr2)
 {
@@ -100,16 +125,26 @@ void SplineInterpolation(double* xArr1, double* xArr2)
 	double* alpha = new double[n];
 	double* beta = new double[n];
 
+	alpha[1] = 0;
+	beta[1] = df0;
+
 	for (int j = 1; j < n - 1; j++)
-		m[j] = (F(xArr1[j + 1]) - F(xArr1[j - 1])) / (2 * h);
+	{
+		alpha[j + 1] = -1 / (4 + alpha[j]);
+		beta[j + 1] = (3 * (F(xArr1[j + 1]) - F(xArr1[j - 1])) / h - beta[j]) / (4 + alpha[j]);
+	}
+
+	for (int j = n - 2; j >= 0; j--)
+		m[j] = alpha[j + 1] * m[j + 1] + beta[j + 1];
+
+	/*for (int j = 1; j < n - 1; j++)
+		m[j] = (F(xArr1[j + 1]) - F(xArr1[j - 1])) / (2 * h);*/
 
 	//наибольшее значение 4-й и 5-й производной достигается в точке х = 2
 	double M4, M5;
-	//M4 = pow(log(3), 4) * 9;
-	//M5 = pow(log(3), 5) * 9;
 
 	M4 = (var == 3) ? pow(log(5), 4) * 25 : pow(log(3), 4) * 9;
-	M5 = (var == 3) ? pow(log(5), 4) * 25 : pow(log(3), 5) * 9;
+	M5 = (var == 3) ? pow(log(5), 5) * 25 : pow(log(3), 5) * 9;
 
 	cout << "M5 = " << M5 << "\nM4 = " << M4 << endl << endl;
 
@@ -136,9 +171,7 @@ void SplineInterpolation(double* xArr1, double* xArr2)
 			S << " | " << abs(F_ - S) << " | " << FindErrorForSpline(M4, M5) << endl;
 	}
 
-	delete[] m;
-	delete[] alpha;
-	delete[] beta;
+	//delete[] b1;
 }
 
 //печать Таблицы разделенных разностей
@@ -193,16 +226,16 @@ void Newton(double* xArr, double* xArr1, double* yArr)
 
 	for (int k = 0; k < n - 1; k++)
 	{
-		double f = DivDiff[0][1];
+		double Pn_x = DivDiff[0][1];
 		double w = 1;
 		for (int i = 1; i < n; i++)
 		{
 			w *= xArr1[k] - xArr[i - 1];
-			f += DivDiff[0][i + 1] * w;
+			Pn_x += DivDiff[0][i + 1] * w;
 		}
 		double F_ = F(xArr1[k]);
 		cout << setprecision(1) << xArr1[k] << "  | " << setprecision(6) << F_ << " | " <<
-			f << " | " << abs(f - F_) << " | " << FindErrorForNewton(xArr1[k], xArr, M6) << " | \n";
+			Pn_x << " | " << abs(Pn_x - F_) << " | " << FindErrorForNewton(xArr1[k], xArr, M6) << " | \n";
 	}
 	for (int i = 0; i < n; i++)
 		delete[] DivDiff[i];
@@ -342,7 +375,7 @@ void MeanSquareApproximationForTable(double* xArr1, double* xArr2)
 
 	double error = sqrt(scalarFF - scalarFG);
 
-	cout << "Оценка погрешности: " << error << endl;
+	cout << "Оценка погрешности: " << "sqrt(" << scalarFF << " - " << scalarFG << ") = "  << error << endl;
 
 	for (int i = 0; i < 3; i++)
 		delete[] A[i];
@@ -360,18 +393,20 @@ double g(double x, int n)
 	case 2: return x * x;
 	}
 }
+
+// вычисляем интеграл по формуле трапеций
 double IntegrG(double a, double b, int n)
 {
-	// вычисляем интеграл по формуле трапеций
 	double eps = 0.000001;
 	double Integral = eps * (F(a) * g(a, n) + F(b) * g(b, n)) / 2.0;
 	for (int i = 1; i <= (b - a) / eps - 1; i++)
 		Integral = Integral + eps * F(a + eps * i) * g(a + eps * i, n);
 	return Integral;
 }
+
+// вычисляем интеграл по формуле трапеций
 double IntegrF(double a, double b)
 {
-	// вычисляем интеграл по формуле трапеций
 	double eps = 0.000001;
 	double Integral = eps * (F(a) * F(a) + F(b) * F(b)) / 2.0;
 	for (int i = 1; i <= (b - a) / eps - 1; i++)
@@ -427,7 +462,7 @@ void MeanSquareApproximationForInterval(double* xArr2)
 	cout << setprecision(4) << "P2(x) = " << c[0] << " + (" << c[1] << "*x) + (" << c[2] << "*x^2)\n";
 	double F = 0;
 	F = IntegrF(a, b) * IntegrF(a, b);
-	cout << "\nОценка погрешности: " << IntegrF(a, b) - IntegrGG(a, b, { 5.57921,  -4.72902 , 3.20390 }) << endl << endl;
+	cout << "\nОценка погрешности: " << "sqrt(" << IntegrF(a, b) << " - " << IntegrGG(a, b, { c[0], c[1], c[2] })  << ") = " << sqrt(IntegrF(a, b) - IntegrGG(a, b, { c[0], c[1], c[2] })) << endl << endl;
 
 }
 
@@ -469,7 +504,6 @@ int main()
 
 	double* xArr = new double[n];
 	double* xArr1 = new double[n];
-	double* yArr = new double[n];
 
 	get_X_Y_Arr(xArr, xArr1, yArr);
 
